@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FinanceFlow | Dashboard de Gastos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #c7d2fe; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #a5b4fc; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen">
+    <div class="p-4 md:p-8 max-w-[1600px] mx-auto">
+        <!-- TOP NAVIGATION -->
+        <nav class="flex flex-col md:flex-row justify-between items-center gap-4 mb-8">
+            <div class="text-center md:text-left">
+                <h1 class="text-3xl font-bold text-slate-800 flex items-center justify-center md:justify-start gap-3">
+                    <span class="p-2 bg-indigo-600 text-white rounded-lg"><i class="fas fa-wallet"></i></span>
+                    Gasto Do Leo
+                </h1>
+                <p class="text-slate-500 text-sm mt-1">Gestão inteligente de despesas pessoais</p>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-center gap-3 w-full md:w-auto">
+                <div class="relative flex-grow md:w-64">
+                    <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                    <input type="text" id="searchInput" placeholder="Buscar transação..."
+                           class="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all">
+                </div>
+                <select id="monthFilter" class="px-4 py-2 rounded-xl border border-slate-200 bg-white outline-none focus:ring-2 focus:ring-indigo-500">
+                    <option value="all">Todos os Meses</option>
+                </select>
+                <select id="categoryFilter" class="px-4 py-2 rounded-xl border border-slate-200 bg-white outline-none focus:ring-2 focus:ring-indigo-500">
+                    <option value="all">Todas Categorias</option>
+                </select>
+                <button onclick="app.refresh()" class="p-2 px-4 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors flex items-center gap-2">
+                    <i class="fas fa-sync"></i> <span class="hidden sm:inline">Sincronizar</span>
+                </button>
+            </div>
+        </nav>
+
+        <!-- KPI GRID -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div class="glass-card p-6 rounded-2xl">
+                <div class="flex items-center justify-between mb-4">
+                    <span class="text-slate-500 text-sm font-medium">Gasto Bruto</span>
+                    <div class="p-2 bg-rose-100 text-rose-600 rounded-lg"><i class="fas fa-arrow-trend-up"></i></div>
+                </div>
+                <div class="text-2xl font-bold text-slate-800" id="grossSpend">R$ 0,00</div>
+                <p class="text-xs text-slate-400 mt-2">Soma de todas as despesas</p>
+            </div>
+            <div class="glass-card p-6 rounded-2xl">
+                <div class="flex items-center justify-between mb-4">
+                    <span class="text-slate-500 text-sm font-medium">Gasto Líquido</span>
+                    <div class="p-2 bg-emerald-100 text-emerald-600 rounded-lg"><i class="fas fa-scale-balanced"></i></div>
+                </div>
+                <div class="text-2xl font-bold text-slate-800" id="netSpend">R$ 0,00</div>
+                <p class="text-xs text-slate-400 mt-2">Despesas menos estornos/pagamentos</p>
+            </div>
+            <div class="glass-card p-6 rounded-2xl">
+                <div class="flex items-center justify-between mb-4">
+                    <span class="text-slate-500 text-sm font-medium">Transações</span>
+                    <div class="p-2 bg-blue-100 text-blue-600 rounded-lg"><i class="fas fa-receipt"></i></div>
+                </div>
+                <div class="text-2xl font-bold text-slate-800" id="totalTx">0</div>
+                <p class="text-xs text-slate-400 mt-2">Total de lançamentos no período</p>
+            </div>
+            <div class="glass-card p-6 rounded-2xl">
+                <div class="flex items-center justify-between mb-4">
+                    <span class="text-slate-500 text-sm font-medium">Média Mensal</span>
+                    <div class="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><i class="fas fa-calendar-alt"></i></div>
+                </div>
+                <div class="text-2xl font-bold text-slate-800" id="avgSpend">R$ 0,00</div>
+                <p class="text-xs text-slate-400 mt-2">Média de gastos por mês</p>
+            </div>
+        </div>
+
+        <!-- MAIN CONTENT -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- LEFT COLUMN: Evolution & Table -->
+            <div class="lg:col-span-2 space-y-8">
+                <div class="glass-card p-6 rounded-2xl">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-lg font-semibold text-slate-800">Evolução de Gastos</h3>
+                        <div class="text-xs text-slate-400">Análise temporal de despesas</div>
+                    </div>
+                    <div class="h-[300px]">
+                        <canvas id="evolutionChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="glass-card rounded-2xl overflow-hidden">
+                    <div class="p-6 flex justify-between items-center border-b border-slate-100">
+                        <h3 class="text-lg font-semibold text-slate-800">Transações Detalhadas</h3>
+                        <div class="flex gap-2">
+                            <button onclick="app.sortData('date')" class="p-2 text-xs font-medium hover:bg-slate-100 rounded-lg transition-colors">Data <i class="fas fa-sort"></i></button>
+                            <button onclick="app.sortData('amount')" class="p-2 text-xs font-medium hover:bg-slate-100 rounded-lg transition-colors">Valor <i class="fas fa-sort"></i></button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto custom-scrollbar max-h-[500px]">
+                        <table class="w-full text-left">
+                            <thead class="bg-slate-50 sticky top-0">
+                                <tr>
+                                    <th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Data</th>
+                                    <th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Descrição</th>
+                                    <th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Categoria</th>
+                                    <th class="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody id="txTableBody" class="divide-y divide-slate-100">
+                                <!-- Dynamic Content -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT COLUMN: Categories & Top Expenses -->
+            <div class="space-y-8">
+                <div class="glass-card p-6 rounded-2xl">
+                    <h3 class="text-lg font-semibold text-slate-800 mb-6">Distribuição de Categorias</h3>
+                    <div class="h-[250px]">
+                        <canvas id="categoryChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="glass-card p-6 rounded-2xl">
+                    <h3 class="text-lg font-semibold text-slate-800 mb-6">Top 5 Maiores Gastos</h3>
+                    <div id="topExpensesList" class="space-y-4">
+                        <!-- Dynamic Content -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class DataManager {
+            constructor() {
+                this.allData = [];
+                this.filteredData = [];
+                this.filters = { month: 'all', category: 'all', search: '' };
+                this.sortConfig = { sortKey: 'date', direction: 'desc' };
+            }
+
+            async loadCSV(url) {
+                return new Promise((resolve, reject) => {
+                    Papa.parse(url, {
+                        download: true,
+                        header: true,
+                        dynamicTyping: true,
+                        skipEmptyLines: true,
+                        complete: (results) => {
+                            this.allData = results.data.map(row => ({
+                                date: row.date,
+                                title: row.title,
+                                amount: Number(row.amount) || 0,
+                                month: row.mes_ano || row.date?.slice(0, 7), // fallback se não tiver mes_ano
+                                category: row.categoria
+                            }));
+                            this.applyFilters();
+                            resolve();
+                        },
+                        error: (err) => reject(err)
+                    });
+                });
+            }
+
+            applyFilters() {
+                this.filteredData = this.allData.filter(item => {
+                    const matchMonth = this.filters.month === 'all' || item.month === this.filters.month;
+                    const matchCat = this.filters.category === 'all' || item.category === this.filters.category;
+                    const matchSearch = !this.filters.search ||
+                                      (item.title && item.title.toLowerCase().includes(this.filters.search.toLowerCase())) ||
+                                      (item.category && item.category.toLowerCase().includes(this.filters.search.toLowerCase()));
+                    return matchMonth && matchCat && matchSearch;
+                });
+                this.sortData();
+            }
+
+            sortData(key) {
+                if (key) {
+                    this.sortConfig.direction = (this.sortConfig.sortKey === key && this.sortConfig.direction === 'asc') ? 'desc' : 'asc';
+                    this.sortConfig.sortKey = key;
+                }
+
+                const { sortKey, direction } = this.sortConfig;
+                this.filteredData.sort((a, b) => {
+                    let valA = sortKey === 'amount' ? a.amount : a.date;
+                    let valB = sortKey === 'amount' ? b.amount : b.date;
+                    if (valA < valB) return direction === 'asc' ? -1 : 1;
+                    if (valA > valB) return direction === 'asc' ? 1 : -1;
+                    return 0;
+                });
+            }
+
+            getMetrics() {
+                const gross = this.filteredData
+                    .filter(i => i.amount > 0)
+                    .reduce((sum, i) => sum + i.amount, 0);
+                const net = this.filteredData.reduce((sum, i) => sum + i.amount, 0);
+                const totalTx = this.filteredData.length;
+                const uniqueMonths = [...new Set(this.filteredData.map(i => i.month))].length;
+                const avg = uniqueMonths > 0 ? gross / uniqueMonths : 0;
+                return { gross, net, totalTx, avg };
+            }
+
+            getChartData(type) {
+                const expensesOnly = this.filteredData.filter(i => i.amount > 0 && (!i.title || !i.title.toLowerCase().includes('pagamento recebido')));
+
+                if (type === 'evolution') {
+                    const monthly = {};
+                    expensesOnly.forEach(i => {
+                        monthly[i.month] = (monthly[i.month] || 0) + i.amount;
+                    });
+                    const labels = Object.keys(monthly).sort();
+                    return { labels, values: labels.map(l => monthly[l]) };
+                }
+
+                if (type === 'category') {
+                    const catMap = {};
+                    expensesOnly.forEach(i => {
+                        catMap[i.category] = (catMap[i.category] || 0) + i.amount;
+                    });
+                    const labels = Object.keys(catMap);
+                    return { labels, values: labels.map(l => catMap[l]) };
+                }
+            }
+
+            getTopExpenses(limit = 5) {
+                return [...this.filteredData]
+                    .filter(i => i.amount > 0)
+                    .sort((a, b) => b.amount - a.amount)
+                    .slice(0, limit);
+            }
+        }
+
+        class ChartManager {
+            constructor() {
+                this.evolutionChart = null;
+                this.categoryChart = null;
+                this.colors = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f43f5e', '#fbbf24', '#a855f7', '#64748b'];
+            }
+
+            renderEvolution(data) {
+                const ctx = document.getElementById('evolutionChart').getContext('2d');
+                if (this.evolutionChart) this.evolutionChart.destroy();
+                this.evolutionChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.labels,
+                        datasets: [{
+                            label: 'Gastos Mensais',
+                            data: data.values,
+                            borderColor: '#4f46e5',
+                            backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                            fill: true,
+                            tension: 0.4,
+                            borderWidth: 3,
+                            pointRadius: 4,
+                            pointBackgroundColor: '#fff',
+                            pointBorderColor: '#4f46e5',
+                            pointBorderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            y: { grid: { color: '#f1f5f9' }, ticks: { callback: v => `R$ ${v.toFixed(0)}` } },
+                            x: { grid: { display: false } }
+                        }
+                    }
+                });
+            }
+
+            renderCategory(data) {
+                const ctx = document.getElementById('categoryChart').getContext('2d');
+                if (this.categoryChart) this.categoryChart.destroy();
+                this.categoryChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: data.labels,
+                        datasets: [{
+                            data: data.values,
+                            backgroundColor: this.colors,
+                            borderWidth: 2,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom', labels: { usePointStyle: true, padding: 20 } }
+                        },
+                        cutout: '70%'
+                    }
+                });
+            }
+        }
+
+        class App {
+            constructor() {
+                this.data = new DataManager();
+                this.charts = new ChartManager();
+                this.formatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+                this.init();
+            }
+
+            async init() {
+                document.getElementById('searchInput').addEventListener('input', (e) => {
+                    this.data.filters.search = e.target.value;
+                    this.update();
+                });
+                document.getElementById('monthFilter').addEventListener('change', (e) => {
+                    this.data.filters.month = e.target.value;
+                    this.update();
+                });
+                document.getElementById('categoryFilter').addEventListener('change', (e) => {
+                    this.data.filters.category = e.target.value;
+                    this.update();
+                });
+                await this.refresh();
+            }
+
+            async refresh() {
+                try {
+                    console.log("Attempting to load CSV from: data/processed/gastos_tratados.csv");
+                    await this.data.loadCSV('data/processed/gastos_tratados.csv');
+                    console.log("CSV loaded successfully. Data count:", this.data.allData.length);
+                    this.populateFilters();
+                    this.update();
+                } catch (e) {
+                    console.error("Error loading CSV:", e);
+                }
+            }
+
+            populateFilters() {
+                const months = [...new Set(this.data.allData.map(i => i.month))].sort().reverse();
+                const cats = [...new Set(this.data.allData.map(i => i.category))].sort();
+                const mFilter = document.getElementById('monthFilter');
+                mFilter.innerHTML = '<option value="all">Todos os Meses</option>' +
+                    months.map(m => `<option value="${m}">${m}</option>`).join('');
+                const cFilter = document.getElementById('categoryFilter');
+                cFilter.innerHTML = '<option value="all">Todas Categorias</option>' +
+                    cats.map(c => `<option value="${c}">${c}</option>`).join('');
+            }
+
+            sortData(key) {
+                this.data.sortData(key);
+                this.update();
+            }
+
+            update() {
+                this.data.applyFilters();
+                this.renderKPIs();
+                this.renderTable();
+                this.renderCharts();
+                this.renderTopExpenses();
+            }
+
+            renderKPIs() {
+                const m = this.data.getMetrics();
+                document.getElementById('grossSpend').textContent = this.formatter.format(m.gross);
+                document.getElementById('netSpend').textContent = this.formatter.format(m.net);
+                document.getElementById('totalTx').textContent = m.totalTx.toLocaleString('pt-BR');
+                document.getElementById('avgSpend').textContent = this.formatter.format(m.avg);
+            }
+
+            renderTable() {
+                const tbody = document.getElementById('txTableBody');
+                tbody.innerHTML = this.data.filteredData.map(item => `
+                    <tr class="hover:bg-slate-50 transition-colors">
+                        <td class="px-6 py-4 text-sm text-slate-600">${item.date}</td>
+                        <td class="px-6 py-4 text-sm font-medium text-slate-800">${item.title}</td>
+                        <td class="px-6 py-4 text-sm text-slate-500">
+                            <span class="px-2 py-1 bg-slate-100 rounded-full text-xs">${item.category}</span>
+                        </td>
+                        <td class="px-6 py-4 text-sm text-right font-semibold ${item.amount < 0 ? 'text-emerald-600' : 'text-rose-600'}">
+                            ${this.formatter.format(item.amount)}
+                        </td>
+                    </tr>
+                `).join('');
+            }
+
+            renderCharts() {
+                const evoData = this.data.getChartData('evolution');
+                const catData = this.data.getChartData('category');
+                this.charts.renderEvolution(evoData);
+                this.charts.renderCategory(catData);
+            }
+
+            renderTopExpenses() {
+                const top = this.data.getTopExpenses();
+                const container = document.getElementById('topExpensesList');
+                container.innerHTML = top.map((item, idx) => `
+                    <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs font-bold text-slate-400 w-4">${idx + 1}</span>
+                            <div>
+                                <p class="text-sm font-medium text-slate-800 truncate w-32">${item.title}</p>
+                                <p class="text-[10px] text-slate-400">${item.category}</p>
+                            </div>
+                        </div>
+                        <span class="text-sm font-bold text-rose-600">${this.formatter.format(item.amount)}</span>
+                    </div>
+                `).join('');
+            }
+        }
+        const app = new App();
+    </script>
+</body>
+</html>
