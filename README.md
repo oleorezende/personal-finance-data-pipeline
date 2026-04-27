@@ -14,7 +14,7 @@ O processo envolve:
 
 ## 📸 Preview do Dashboard
 
-![Dashboard Overview](./assets/dashboard.png)
+![Dashboard Overview](./assets/dashboard.jpg)
 
 ## 🧠 Tecnologias Utilizadas
 
