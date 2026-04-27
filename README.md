@@ -12,6 +12,10 @@ O processo envolve:
 - Geração de base única em Excel
 - Desenvolvimento de dashboard interativo em HTML
 
+## 📸 Preview do Dashboard
+
+![Dashboard Overview](./assets/dashboard.png)
+
 ## 🧠 Tecnologias Utilizadas
 
 - Python
