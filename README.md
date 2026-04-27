@@ -1,4 +1,4 @@
-# 📊 Gasto do Leo
+# 📊 Gasto do Cartão
 
 Dashboard de controle financeiro pessoal desenvolvido a partir de dados reais exportados do Nubank.
 
